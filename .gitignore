@@ -3,7 +3,6 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-!target/*.jar
 
 ### STS ###
 .apt_generated
@@ -47,7 +46,6 @@ build/
 .mtj.tmp/
 
 # Package Files #
-*.jar
 *.war
 *.nar
 *.ear
@@ -99,4 +97,3 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
-/target/
