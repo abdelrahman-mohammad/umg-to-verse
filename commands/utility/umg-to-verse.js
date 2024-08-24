@@ -40,7 +40,7 @@ module.exports = {
                     await http.post("users", {
                         username: user.username,
                         discordId: user.id,
-                        email: "", // Blank for now
+                        email: user.id, // For now
                     });
                 } else {
                     throw error; // Re-throw if it's not a 404 error
