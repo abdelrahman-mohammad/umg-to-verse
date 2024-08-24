@@ -102,9 +102,9 @@ if (action === "delete") {
                 console.log(
                     `Successfully reloaded ${globalData.length} global commands`
                 );
-            } else if (commandType === "dev") {
+            } else if (commandType === "guild") {
                 console.log(
-                    `Started refreshing ${devCommands.length} dev commands.`
+                    `Started refreshing ${devCommands.length} guild commands.`
                 );
 
                 const devData = await rest.put(
@@ -116,11 +116,11 @@ if (action === "delete") {
                 );
 
                 console.log(
-                    `Successfully reloaded ${devData.length} dev commands.`
+                    `Successfully reloaded ${devData.length} guild commands.`
                 );
             } else {
                 console.error(
-                    "Please provide a valid command type (either 'dev' or 'global')."
+                    "Please provide a valid command type (either 'guiuld' or 'global')."
                 );
             }
         } catch (error) {

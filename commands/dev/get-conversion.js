@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require("discord.js");
 const axios = require("axios");
-const fs = require("fs");
+const fs = require("fs").promises;
+const path = require("path");
 require("dotenv").config();
 
 module.exports = {
@@ -8,58 +9,81 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName("get-conversion")
         .setDescription("Get a specific conversion by ID.")
-        .addStringOption((option) =>
-            option
-                .setName("id")
-                .setDescription("The ID of the conversion.")
-                .setRequired(true)
-                .setMinLength(36)
-                .setMaxLength(36)
-        ),
+        .addStringOption((option) => option.setName("id").setDescription("The ID of the conversion.").setRequired(true).setMinLength(36).setMaxLength(36)),
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
 
-        // ============================ Interaction Variables ============================
-        const { user, member, id, client } = interaction;
+        const { user, client } = interaction;
+        const conversionId = interaction.options.getString("id");
 
-        // ============================ Axios Instance ============================
         const http = axios.create({
             baseURL: process.env.API_BASE_URL,
+            headers: {
+                "X-Api-Key": process.env.API_KEY,
+            },
         });
 
-        // ============================ Ephemeral Message ============================
         try {
-            // Send the request to the API and get the response
-            const conversionResponse = await http.request({
-                url: `/umg-to-verse/${interaction.options.getString("id")}`,
-                method: "get",
-                headers: {
-                    "X-Api-Key": process.env.API_KEY,
-                },
-            });
+            const response = await http.get(`/umg-to-verse/${conversionId}`);
+            const conversion = response.data;
 
-            // Set the conversions embed
+            // Parse the timestamp or use current time if invalid
+            let timestamp;
+            try {
+                timestamp = conversion.createdAt ? new Date(conversion.createdAt) : new Date();
+                if (isNaN(timestamp.getTime())) throw new Error("Invalid date");
+            } catch (error) {
+                console.warn(`Invalid createdAt value: ${conversion.createdAt}. Using current time.`);
+                timestamp = new Date();
+            }
+
             const conversionEmbed = new EmbedBuilder()
                 .setColor(0x0466c8)
-                .setTimestamp()
-                .setTitle(`Conversion #${conversionResponse.data.id}`)
-                .setDescription(`\`\`\`${conversionResponse.data.output}\`\`\``)
+                .setTitle(`Conversion #${conversion.id}`)
+                .setTimestamp(timestamp)
                 .setFooter({
-                    text: "Tip: Use the 'file' subcommand for larger UMG objects.",
-                    iconURL: "../../assets/verse-tools-square.png",
+                    text: `Requested by ${user.tag}`,
+                    iconURL: user.avatarURL(),
                 });
 
-            // Edit the reply with the conversions embed
-            await interaction.editReply({
-                embeds: [conversionEmbed],
-                ephemeral: true,
-            });
-        } catch (error) {
-            // ============================ Error Handling ============================
-            // -------------- Error Variables --------------
-            const { status, exception, message } = error.response.data;
+            if (conversion.output.length < 4090) {
+                conversionEmbed.setDescription(`\`\`\`${conversion.output}\`\`\``);
+                await interaction.editReply({ embeds: [conversionEmbed] });
+            } else {
+                const tempDir = path.join(__dirname, "..", "..", "temp");
+                await fs.mkdir(tempDir, { recursive: true });
+                const filePath = path.join(tempDir, `conversion-${conversion.id}.txt`);
 
-            // -------------- Error Embed --------------
+                await fs.writeFile(filePath, conversion.output);
+                const attachment = new AttachmentBuilder(filePath, { name: `conversion-${conversion.id}.txt` });
+
+                conversionEmbed.setDescription("The conversion output is too large to display here. Please see the attached file.");
+
+                await interaction.editReply({
+                    embeds: [conversionEmbed],
+                    files: [attachment],
+                });
+
+                // Clean up the temporary file
+                setTimeout(() => fs.unlink(filePath).catch(console.error), 5000);
+            }
+        } catch (error) {
+            console.error("Error fetching conversion:", error);
+
+            let status, exception, message, errorDetails;
+
+            if (error.response) {
+                status = error.response.status;
+                exception = error.response.data.exception || "UnknownException";
+                message = error.response.data.message || "An unknown error occurred";
+                errorDetails = error.response.data.error || "No additional error details";
+            } else {
+                status = 500;
+                exception = "InternalError";
+                message = error.message || "An unexpected error occurred";
+                errorDetails = "No additional error details";
+            }
+
             const errorEmbed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle(`<:exit:1276830233214976000> ERROR: ${exception}`)
@@ -73,7 +97,7 @@ module.exports = {
                     },
                     {
                         name: "Error",
-                        value: `\`\`\`${error.response.data.error}\`\`\``,
+                        value: `\`\`\`${errorDetails}\`\`\``,
                         inline: true,
                     },
                     {
@@ -85,12 +109,10 @@ module.exports = {
                 .setTimestamp()
                 .setFooter({
                     text: "If this error persists, open a ticket.",
-                    iconURL: "../../assets/verse-tools-square.png",
+                    iconURL: client.user.avatarURL(),
                 });
 
-            // -------------- Edit the reply with the error embed --------------
-            await interaction.deleteReply();
-            return await interaction.followUp({
+            await interaction.editReply({
                 embeds: [errorEmbed],
                 ephemeral: true,
             });
