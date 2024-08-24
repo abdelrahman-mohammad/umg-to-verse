@@ -37,7 +37,7 @@ module.exports = {
             } catch (error) {
                 if (error.response && error.response.status === 404) {
                     // User doesn't exist, create a new user
-                    await http.post("api/users", {
+                    await http.post("users", {
                         username: user.username,
                         id: user.id,
                         email: "", // Blank for now
