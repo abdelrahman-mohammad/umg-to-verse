@@ -24,7 +24,45 @@ module.exports = {
         // ============================ Axios Instance ============================
         const http = axios.create({
             baseURL: process.env.API_BASE_URL,
+            headers: {
+                "X-Api-Key": process.env.API_KEY,
+                "Content-Type": "application/json",
+            },
         });
+
+        // ============================ Ensure User Exists ============================
+        async function ensureUserExists() {
+            try {
+                await http.get(`users/${user.id}`);
+            } catch (error) {
+                if (error.response && error.response.status === 404) {
+                    // User doesn't exist, create a new user
+                    await http.post("api/users", {
+                        username: user.username,
+                        id: user.id,
+                        email: "", // Blank for now
+                    });
+                } else {
+                    throw error; // Re-throw if it's not a 404 error
+                }
+            }
+        }
+
+        try {
+            await ensureUserExists();
+        } catch (error) {
+            console.error("Error ensuring user exists:", error);
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle(`<:exit:1276830233214976000> ERROR: User Registration Failed`)
+                .setDescription("An error occurred while registering your user. Please try again later.")
+                .setTimestamp()
+                .setFooter({
+                    text: "If this error persists, open a ticket.",
+                    iconURL: client.user.avatarURL(),
+                });
+            return interaction.editReply({ embeds: [errorEmbed] });
+        }
 
         let content;
 
@@ -46,19 +84,16 @@ module.exports = {
                     embeds: [errorEmbed],
                 });
             } else {
-                // -------------- Read the file content --------------
                 content = await axios.get(attachment.url).then((response) => response.data);
             }
         }
 
+        // ============================ Public Embed ============================
         async function sendPublicEmbed() {
             try {
                 const countResponse = await http.request({
                     url: `users/${user.id}/conversions`,
                     method: "get",
-                    headers: {
-                        "X-Api-Key": process.env.API_KEY,
-                    },
                 });
 
                 const conversionCount = countResponse.data.length;
@@ -80,7 +115,6 @@ module.exports = {
                     embeds: [publicEmbed],
                 });
             } catch (error) {
-                // ============================ Error Handling ============================
                 console.error(error);
                 // -------------- Error Variables --------------
                 const { status, exception, message } = error.response.data;
@@ -114,7 +148,6 @@ module.exports = {
                         iconURL: client.user.avatarURL(),
                     });
 
-                // -------------- Edit the reply with the error embed --------------
                 await interaction.deleteReply();
                 return await interaction.followUp({
                     embeds: [errorEmbed],
@@ -137,17 +170,9 @@ module.exports = {
         // ============================ Ephemeral Message ============================
         try {
             // -------------- Send the request to the API and get the response --------------
-            const response = await http.request({
-                url: "umg-to-verse",
-                method: "post",
-                params: {
-                    userId: user.id,
-                },
-                headers: {
-                    "Content-Type": "text/plain",
-                    "X-Api-Key": process.env.API_KEY,
-                },
-                data: content,
+            const response = await http.post("umg-to-verse", content, {
+                params: { userId: user.id },
+                headers: { "Content-Type": "text/plain" },
             });
 
             if (!response.data || !response.data.output) {
