@@ -39,7 +39,7 @@ module.exports = {
                     // User doesn't exist, create a new user
                     await http.post("users", {
                         username: user.username,
-                        id: user.id,
+                        discordId: user.id,
                         email: "", // Blank for now
                     });
                 } else {
